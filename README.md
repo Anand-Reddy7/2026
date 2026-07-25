@@ -2,9 +2,9 @@
 
 ## Current Profile
 
-- **Experience:** 9+ years
-- **Current Company:** IBM (6 years)
-- **Current CTC:** ₹44 LPA
+- **Experience:** 8+ years
+- **Current Company:** IBM (4 years)
+- **Current CTC:** ₹0 LPA
 
 ### Core Skills
 
