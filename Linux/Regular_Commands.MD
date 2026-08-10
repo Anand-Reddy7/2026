@@ -22,6 +22,8 @@ Search
 - find
 - awk
 - sed
+- xargs
+- cut
 
 Permissions
 -----------
