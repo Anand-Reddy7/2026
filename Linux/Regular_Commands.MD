@@ -874,3 +874,68 @@ ps -ef | wc -l
 ```
 grep "ERROR" application.log | wc -l
 ```
+
+-------------------------------------------------
+# TR
+
+tr (translate) is used to replace, delete, or transform characters.
+
+## Convert lowercase to uppercase
+```
+echo "hello world" | tr 'a-z' 'A-Z'
+```
+
+## Convert uppercase to lowercase
+```
+echo "HELLO WORLD" | tr 'A-Z' 'a-z'
+```
+
+## Replace a character
+```
+echo "hello-world" | tr '-' '_'
+```
+
+## Replace spaces with underscores
+```
+echo "hello world" | tr ' ' '_'
+```
+
+## Delete a specific character
+```
+echo "hello123" | tr -d '0-9'
+```
+
+## Keep only numbers
+```
+echo "abc123xyz456" | tr -cd '0-9'
+```
+
+## Keep only letters
+```
+echo "abc123xyz456" | tr -cd 'a-zA-Z'
+```
+
+## Replace multiple spaces with one space
+```
+echo "hello    world" | tr -s ' '
+```
+
+## Convert newlines into spaces
+```
+cat file.txt | tr '\n' ' '
+```
+
+## Convert colon-separated values to new lines
+```
+echo "one:two:three" | tr ':' '\n'
+```
+
+## Remove carriage return from Windows files
+```
+tr -d '\r' < file.txt
+```
+
+## Replace tabs with spaces
+```
+cat file.txt | tr '\t' ' '
+```
