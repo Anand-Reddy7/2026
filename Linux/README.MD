@@ -1,0 +1,6 @@
+##  What Happens When You Read a File in Linux?
+
+
+When you run a command such as cat /home/user/test.txt, the cat application requests the Linux kernel to open and read the file using system calls such as open() and read(). The kernel identifies the process and its user credentials, then resolves the file path and checks whether the file exists. It verifies the user's permissions by checking the file's owner, group, permission bits, and any applicable ACLs or security policies such as SELinux. 
+
+Once access is allowed, the kernel identifies the file system and retrieves the file's metadata, including the location of the file's data. The kernel then checks the page cache to see whether the required data is already available in RAM. If the data is cached, it can return the data directly without accessing the disk. If the data is not cached, the kernel asks the file system to locate the required blocks, which are then accessed through the block layer and storage driver. The SSD or HDD reads the required data and returns it back through the storage driver, block layer, and file system to the kernel. The kernel then makes the data available to the application, and cat writes the contents to the terminal.
