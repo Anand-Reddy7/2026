@@ -202,3 +202,38 @@ WantedBy=multi-user.target
 [root@anand-vsi-dnd nginx]#
 ```
 
+## How to check a specific package when it installed?
+```
+rpm -q --last nginx
+```
+
+```
+[root@anand-server-1-rhel ~]# 
+[root@anand-server-1-rhel ~]# rpm -q --last tree
+tree-1.7.0-15.el8.x86_64                      Sun 23 Aug 2026 12:30:34 PM UTC
+[root@anand-server-1-rhel ~]# date 
+Sun Aug 23 12:31:46 UTC 2026
+[root@anand-server-1-rhel ~]# rpm -qi tree
+Name        : tree
+Version     : 1.7.0
+Release     : 15.el8
+Architecture: x86_64
+Install Date: Sun 23 Aug 2026 12:30:34 PM UTC
+Group       : Unspecified
+Size        : 111611
+License     : GPLv2+
+Signature   : RSA/SHA256, Wed 07 Nov 2018 05:20:51 PM UTC, Key ID 199e2f91fd431d51
+Source RPM  : tree-1.7.0-15.el8.src.rpm
+Build Date  : Wed 07 Nov 2018 04:49:35 PM UTC
+Build Host  : x86-vm-10.build.eng.bos.redhat.com
+Relocations : (not relocatable)
+Packager    : Red Hat, Inc. <http://bugzilla.redhat.com/bugzilla>
+Vendor      : Red Hat, Inc.
+URL         : http://mama.indstate.edu/users/ice/tree/
+Summary     : File system tree viewer
+Description :
+The tree utility recursively displays the contents of directories in a
+tree-like format.  Tree is basically a UNIX port of the DOS tree
+utility.
+[root@anand-server-1-rhel ~]# 
+```
