@@ -204,3 +204,65 @@ steps:
 We can install additional software during the workflow using shell commands or actions, but the changes are temporary because the GitHub-hosted runner environment is ephemeral. If we need persistent custom software, special networking, or a customized environment, we would typically use a self-hosted runner.
 
 
+## 2. Where to create secret to use it ?
+
+In your GitHub repository:
+```
+Repository → Settings → Secrets and variables → Actions → New repository secret
+```
+
+How to use it :
+```yaml
+- name: Setup Terraform
+  uses: hashicorp/setup-terraform@v3
+  with:
+    cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+```
+
+
+# Real time Terraform workflow
+
+```yaml
+name: 'Terraform'
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: 'Terraform'
+    runs-on: ubuntu-latest
+    environment: production
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      # Checkout the repository to the GitHub Actions runner
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Install Terraform CLI and configure Terraform Cloud authentication
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          cli_config_credentials_token: ${{ secrets.TF_API_TOKEN }}
+
+      # Initialize Terraform
+      - name: Terraform Init
+        run: terraform init
+
+      # Check Terraform formatting
+      - name: Terraform Format
+        run: terraform fmt -check
+
+      # Generate Terraform execution plan
+      - name: Terraform Plan
+        run: terraform plan -input=false
+```
