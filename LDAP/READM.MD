@@ -539,3 +539,19 @@ chown root:root /etc/sssd/sssd.conf
 systemctl enable sssd
 systemctl restart sssd
 ```
+
+# Questions
+
+## Expline the complete Open LDAP implementation ?
+
+```
+I implemented a centralized identity and authentication solution using OpenLDAP and Kerberos.
+
+OpenLDAP acts as the identity provider and stores users, groups, UID/GID and other POSIX attributes. Kerberos is used for authentication and ticket management.
+
+On the Linux clients, SSSD integrates the operating system with LDAP and Kerberos. SSSD retrieves identity information from LDAP and uses Kerberos for authentication. NSS allows commands such as id and getent to resolve LDAP users, while PAM integrates the authentication process with SSH and other Linux services.
+
+I also configured TLS between the LDAP clients and server so LDAP communication is encrypted.
+
+Finally, I validated the complete flow by logging in with an LDAP user and verifying identity resolution and Kerberos authentication.
+```
