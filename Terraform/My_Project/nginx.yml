@@ -1,0 +1,26 @@
+---
+- name: Install and configure nginx
+  hosts: "{{ target_group }}"
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Install nginx
+      ansible.builtin.dnf:
+        name: nginx
+        state: present
+
+    - name: Create nginx home page
+      ansible.builtin.copy:
+        content: |
+          Hello from {{ inventory_hostname }}
+        dest: /usr/share/nginx/html/index.html
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Enable and start nginx
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
