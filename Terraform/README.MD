@@ -589,9 +589,7 @@ lifecycle
 
 # Terraform Drift 
 
-Terraform drift happens when your real infrastructure no longer matches what your Terraform configuration says it should be.
-
-Drift commonly happens because someone manually modifies resources in a cloud console, another automation tool changes them, resources are deleted outside Terraform, or cloud/provider defaults change.
+Terraform drift means a difference between the desired infrastructure defined in Terraform and the actual infrastructure running in the cloud, usually caused by manual changes or changes made outside Terraform. terraform plan can detect these differences, and we can then reconcile the infrastructure with our Terraform configuration.
 
 Terraform drift is a situation where the actual infrastructure in the cloud differs from what is defined in the Terraform configuration or expected by Terraform. For example, if Terraform creates an EC2 instance with a t3.micro instance type and someone manually changes it to t3.large from the AWS console, that creates drift. When we run terraform plan, Terraform refreshes the current infrastructure information from the cloud provider and compares it with the desired configuration, then shows the differences. We can either apply the Terraform configuration to bring the infrastructure back to the desired state or update the Terraform configuration if the manual change was intentional.
 
