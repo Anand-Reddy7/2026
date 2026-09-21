@@ -1,5 +1,8 @@
 # GutHub Actions
+
+```
 GitHub Actions is GitHub's native CI/CD automation platform. It allows us to define workflows as YAML files that are triggered by repository events such as push or pull request. The workflow contains jobs and steps, and those jobs execute on GitHub-hosted or self-hosted runners.
+```
 
 ```text
 Developer

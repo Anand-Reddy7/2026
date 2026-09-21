@@ -1,12 +1,18 @@
 # GitHub
 
-
-
 ## What are the advantages and disadvantages of Git rebase?
 
-```text
-The main advantage of rebase is that it creates a clean, linear Git history, keeps the feature branch updated with the latest base branch, and allows us to clean up commits before creating a PR. The main disadvantages are that it rewrites commit history and changes commit IDs, can cause problems on shared branches, may require a force push, and conflict resolution can become complicated. So I normally use rebase on private feature branches and avoid rebasing shared branches.
-```
+The main advantage of rebase is that: 
+
+- it creates a clean, linear Git history
+- keeps the feature branch updated with the latest base branch, and allows us to clean up commits before creating a PR. 
+
+The main disadvantages are that:
+- it rewrites commit history and changes commit IDs, can cause problems on shared branches
+- may require a force push, and conflict resolution can become complicated. 
+
+So I normally use rebase on private feature branches and avoid rebasing shared branches.
+
 
 ```text
                  Git Branch
