@@ -1,6 +1,6 @@
 # GitHub
 
-## What are the advantages and disadvantages of Git rebase?
+# What are the advantages and disadvantages of Git rebase?
 
 The main advantage of rebase is that: 
 
