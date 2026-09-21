@@ -586,3 +586,15 @@ depends_on
 lifecycle
 → controls create/update/replace/destroy behavior
 ```
+
+# Terraform Drift 
+
+Terraform drift happens when your real infrastructure no longer matches what your Terraform configuration says it should be.
+
+Drift commonly happens because someone manually modifies resources in a cloud console, another automation tool changes them, resources are deleted outside Terraform, or cloud/provider defaults change.
+
+```shell
+Terraform code = desired state
+Cloud resources = actual state
+Difference between them = drift
+```
