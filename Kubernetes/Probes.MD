@@ -1,6 +1,6 @@
 # Probes
 ![image](Images/rediness_liveness.png)
-![image](Images/diff.png)
+![image](Images/liveness_readiness_startup.png)
 
 ```text
 Health Probes

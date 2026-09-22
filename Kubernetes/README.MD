@@ -13,7 +13,7 @@ kubectl apply -f namespaces.yaml --dry-run=server
 kubectl diff -f namespaces.yaml
 
 # 4. Actually apply
-kubectl apply -f namespaces.yamlply -f namespaces.yaml --dry-run=server
+kubectl apply -f namespaces.yaml
 ```
 
 # ApiVsrions
