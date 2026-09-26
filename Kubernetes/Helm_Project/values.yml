@@ -1,0 +1,15 @@
+namespace: dev
+image: nginx
+image_version: latest
+
+#Ports
+containerPort: 80
+targetPort: 80
+nodePort: 30090
+
+replicas: 2
+
+requests_cpu: "100m"
+requests_memory: "128Mi"
+limits_cpu: "100m"
+limits_memory: "256Mi"

@@ -169,3 +169,56 @@ autoscaling/v2
 policy/v1
 └── PodDisruptionBudget
 ```
+
+# Write a Python Program to deploy the Deployment & Service. Also check the rollback status. if Deployment failed them rollout to the old deployment.
+
+```py
+# kubectl apply -f deployment.yml
+# kubectl apply -f service.yml
+# kubectl rollout status deployment/my-app --timeout=120s
+# kubectl rollout undo deployment/my-app
+import subprocess
+import sys
+
+
+def run(command):
+    print(f"Running: {command}")
+
+    result = subprocess.run(
+        command,
+        shell=True
+    )
+
+    return result.returncode == 0
+
+
+# 1. Apply deployment
+if not run("kubectl apply -f deployment.yml"):
+    print("Failed to apply deployment.yml")
+    sys.exit(1)
+
+
+# 2. Apply service
+if not run("kubectl apply -f service.yml"):
+    print("Failed to apply service.yml")
+    sys.exit(1)
+
+
+# 3. Check deployment rollout
+if not run("kubectl rollout status deployment/my-app --timeout=120s"):
+
+    print("Deployment failed. Starting rollback...")
+
+    # 4. Rollback deployment
+    if run("kubectl rollout undo deployment/my-app"):
+        print("Rollback initiated successfully.")
+    else:
+        print("Rollback failed.")
+
+    sys.exit(1)
+
+
+print("Deployment completed successfully.")
+```
+
+
