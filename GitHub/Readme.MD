@@ -257,3 +257,12 @@ echo $?
 ``` 
 
 I can use git branch --merged main to list branches that have been merged into main, and git branch --no-merged main for branches that haven't. For checking one specific branch, I can use git merge-base --is-ancestor feature/branch main and check the exit status.
+
+### git merge --squash 
+
+git merge --squash  combines all the changes from another branch into my current branch without bringing its individual commit history. I then create a single commit containing all those changes, which keeps the target branch history clean."
+
+```sh
+git merge --squash feature
+git commit -m "Add new feature"
+```

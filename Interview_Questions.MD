@@ -31,3 +31,30 @@ Finally, I would add monitoring and alerts for database query latency and connec
 
 So my approach is not just to restart the application or increase the connection limit. I first understand why the connections are getting exhausted, restore the service, fix the root cause, and then add monitoring and preventive controls so the same incident does not happen again.
 ```
+
+# Read the URLs from a text file, make an HTTP GET request for each URL, capture the HTTP status code, measure the request latency using time.perf_counter(), and write the URL, status code, and latency into a CSV file.
+
+```py
+import requests
+import json
+import time
+import csv
+# read the text file
+# Hit the URL's
+# check the status 
+# Find the response latency of the URL 
+# Url, status_code, latency upload into CSV file
+
+with open('status_response.csv', 'w', newline='') as wf:
+    writer = csv.writer(wf)
+    writer.writerow(['URL', 'Status_Code', 'Latency'])
+    with open('url.txt', 'r') as read_file:
+        data = read_file.readlines()
+        for line in data:
+            start_time = time.perf_counter()
+            request_data = requests.get(line)
+            end_time = time.perf_counter()
+            latency = end_time - start_time
+            status_code = request_data.status_code
+            writer.writerow([line.strip(), status_code, round(latency, 3)])
+```
