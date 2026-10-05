@@ -5,6 +5,7 @@
     Frameworks such as LangChain use it as part of the tool definition/schema exposed to the LLM.
 
 ## Ground troubleshooting
+## Persistence comes from the checkpointer.
 
 
 ------------------------------------------------------
@@ -15,6 +16,7 @@
 - Blast radius
 - description/docstring 
 - ground
+- checkpointer
 ```
 
 
@@ -22,7 +24,6 @@
 
 ------------------------------------------------------
 ## Blast radius
-
 How much of the system is affected when something fails, is attacked, or a change goes wrong.
 
 ## Grounding
