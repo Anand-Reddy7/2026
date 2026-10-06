@@ -428,7 +428,7 @@ Upper HNSW layers are highways; lower layers are local roads.
 │      ├── Search
 │      │      ├── Dense / Semantic
 │      │      ├── Sparse / BM25
-│      │      ├── Hybrid
+│      │      ├── Hybrid with RRF
 │      │      └── Metadata Filtering
 │      │
 │      └── Result Optimization
@@ -437,6 +437,235 @@ Upper HNSW layers are highways; lower layers are local roads.
 │             ├── Deduplication
 │             └── Top-K
 ```
+
+
+## Query Optimization - Query Rewrite
+
+Query rewriting is a retrieval optimization technique where the original user query is reformulated into a clearer, search-oriented query before retrieval. For example, in my Kubernetes troubleshooting RAG system, a vague query like ‘my pod is not coming up’ can be rewritten into a query containing Kubernetes concepts such as Pending, CrashLoopBackOff and ImagePullBackOff. I then embed the rewritten query and search Qdrant. The goal is to improve retrieval quality while preserving important technical terms from the original query
+
+```py
+from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(model="gpt-5.4", temperature=0)
+
+def rewrite_query(query: str) -> str:
+    prompt = f"""
+Rewrite the following Kubernetes troubleshooting question
+for RAG retrieval.
+
+Keep Kubernetes resource names, error messages,
+pod names and technical terms unchanged.
+
+Question:
+{query}
+"""
+
+    response = llm.invoke(prompt)
+
+    return response.content
+```
+
+Sometimes, the LLM may rewrite the query incorrectly and remove important technical information. Therefore, we should instruct the LLM to preserve exact terms that are valuable for retrieval, such as:
+
+```
+Error codes
+Kubernetes status/reasons
+Resource names
+Commands
+Versions
+Technical keywords
+```
+
+## Query Optimization - Multi-Query
+
+Multi-query is a retrieval optimization technique where I use an LLM to generate multiple search queries from the original user question. Each query is searched independently against the vector database, and the retrieved results are combined and deduplicated. This improves recall because the same problem can be expressed in different ways. In my Kubernetes RAG system, a query like ‘pod is not starting’ could generate searches around Pending, CrashLoopBackOff and ImagePullBackOff. The trade-off is increased latency and retrieval cost.”
+
+```
+Query Rewrite → one better query.
+Multi-Query → multiple queries to improve recall.
+
+User:
+"Why is my pod not starting?"
+
+
+Query Rewrite:
+"Kubernetes pod failing to start due to
+Pending, CrashLoopBackOff or ImagePullBackOff"
+
+
+Multi-Query:
+1. "Kubernetes pod stuck in Pending"
+2. "Kubernetes pod CrashLoopBackOff"
+3. "Kubernetes ImagePullBackOff troubleshooting"
+```
+
+```py
+def generate_queries(question: str) -> list[str]:
+    prompt = f"""
+Generate 3 different search queries for the following
+Kubernetes troubleshooting question.
+
+Preserve exact error codes, resource names, commands,
+versions and Kubernetes technical terms.
+
+Question:
+{question}
+"""
+
+    response = llm.invoke(prompt)
+
+    return response.content.splitlines()
+```
+
+**Advantages:** better recall, handles ambiguous questions, searches from different perspectives.
+
+**Disadvantages:** more latency, embedding/search cost, duplicate/noisy results.
+
+So we shouldn't blindly generate 10–20 queries. Something like 3 targeted queries is often a reasonable starting point, then tune based on evaluation.
+
+
+## Search - Dense / Semantic Search
+
+Dense or semantic search converts both the user query and documents into embedding vectors and retrieves documents based on semantic similarity. In my Kubernetes RAG system, runbook chunks are embedded and stored in Qdrant. At query time, I generate a query embedding, Qdrant uses HNSW for efficient nearest-neighbor search and cosine similarity for relevance, and returns the Top-K chunks. The advantage is that the user's wording doesn't need to exactly match the runbook terminology.
+
+Dense search = meaning-based retrieval using embeddings.
+
+**Main limitation:**
+
+Dense search can be weaker when exact keywords matter.
+
+## Search — Sparse / BM25
+
+Sparse search is keyword-based retrieval. A common ranking algorithm is BM25, which considers term frequency, inverse document frequency and document length normalization. In my Kubernetes RAG system, sparse search is useful for exact technical terms such as ImagePullBackOff, OOMKilled, pod names and error codes. Dense search is better for semantic meaning, while BM25 is stronger for exact keyword matching.
+
+```
+                User Query
+                    ↓
+          ┌─────────┴─────────┐
+          ↓                   ↓
+     Dense Search        Sparse/BM25
+      (meaning)          (keywords)
+          ↓                   ↓
+          └─────────┬─────────┘
+                    ↓
+              Combine results
+                    ↓
+               Hybrid Search
+```
+
+## Search — Hybrid Search
+
+Hybrid search combines dense semantic retrieval with sparse keyword retrieval such as BM25. Dense retrieval helps understand the meaning of a Kubernetes question, while BM25 is useful for exact terms such as ImagePullBackOff, error codes and resource names. I can retrieve results from both approaches and fuse their rankings using a technique such as Reciprocal Rank Fusion, or RRF. This gives better coverage than relying only on semantic or keyword search.
+
+```
+Dense = meaning, BM25 = keywords, Hybrid = both, RRF = one way to combine their rankings.
+```
+
+```py
+# 4. Create BM25 index
+
+tokenized_chunks = [
+    doc.page_content.lower().split()
+    for doc in chunks
+]
+
+bm25 = BM25Okapi(tokenized_chunks)
+
+
+# 5. Dense Search
+
+def dense_search(query: str, k: int = 5):
+
+    return vectorstore.similarity_search(
+        query,
+        k=k
+    )
+
+
+# 6. BM25 Search
+
+def sparse_search(query: str, k: int = 5):
+
+    tokenized_query = query.lower().split()
+
+    scores = bm25.get_scores(tokenized_query)
+
+    ranked_indexes = sorted(
+        range(len(scores)),
+        key=lambda i: scores[i],
+        reverse=True
+    )
+
+    return [
+        chunks[i]
+        for i in ranked_indexes[:k]
+    ]
+```
+
+```
+User Query
+    │
+    ├────────────────────┐
+    ↓                    ↓
+Dense Search         Sparse Search
+    ↓                    ↓
+Embedding               BM25
+    ↓                    ↓
+Qdrant/HNSW          Keyword Match
+    ↓                    ↓
+Top 5                  Top 5
+    │                    │
+    └─────────┬──────────┘
+              ↓
+             RRF
+              ↓
+        Deduplicate/Rank
+              ↓
+            Top 3
+              ↓
+             LLM
+```
+
+**Dense/Qdrant + Sparse/BM25 → RRF → Top-K → LLM**
+
+If the user asks about ImagePullBackOff, dense search can find semantically related image-pull troubleshooting documents, while BM25 gives importance to the exact ImagePullBackOff keyword. RRF combines both rankings, and the best Top-K chunks are passed to the LLM.”
+
+
+## Metadata Filtering
+
+Metadata filtering restricts retrieval using attributes stored with the document, such as environment, team, category or source. For example, in my Kubernetes RAG system, if a user asks about an ImagePullBackOff issue in production, I can filter Qdrant by environment=production and then perform semantic search. This improves relevance and can also help enforce access boundaries.
+
+```
+Semantic Search
+"What information is relevant?"
+
+Metadata Filtering
+"Which documents am I allowed/interested to search?"
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
