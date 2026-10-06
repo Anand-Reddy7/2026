@@ -6,6 +6,7 @@
 
 ## Ground troubleshooting
 ## Persistence comes from the checkpointer.
+## The upper layers are sparse
 
 
 ------------------------------------------------------
@@ -17,6 +18,7 @@
 - description/docstring 
 - ground
 - checkpointer
+- sparse
 ```
 
 
