@@ -643,8 +643,421 @@ Metadata Filtering
 "Which documents am I allowed/interested to search?"
 ```
 
+## RESULT OPTIMIZATION - RERANKING
+
+Reranking is a second-stage retrieval optimization. First, I use fast retrieval such as dense search, BM25 or hybrid search to get candidate chunks. Then I use a more accurate reranking model to reorder those candidates based on their relevance to the original query. For example, I might retrieve 20 Kubernetes runbook chunks and rerank them before selecting the best 3–5 chunks for the LLM. This improves context quality without applying an expensive relevance model to the entire knowledge base.
 
 
+```
+             Query
+               ↓
+       ┌───────┴───────┐
+       ↓               ↓
+     Dense            BM25
+       ↓               ↓
+       └───────┬───────┘
+               ↓
+              RRF
+               ↓
+        Candidate chunks
+               ↓
+           Reranker
+               ↓
+        Best-ranked chunks
+               ↓
+             Top-K
+               ↓
+              LLM
+```
+
+```
+Retriever → FIND candidates
+RRF       → COMBINE retrieval rankings
+Reranker  → REORDER candidates accurately
+Top-K     → SELECT final chunks
+LLM       → GENERATE answer
+```
+
+
+## RESULT OPTIMIZATION - Score Threshold
+
+Score threshold is used to remove low-relevance retrieval results before sending context to the LLM. For example, even if I request Top-5 Kubernetes runbook chunks, I don't necessarily want all five if some have poor relevance scores. I can apply a minimum relevance threshold and keep only sufficiently relevant chunks. The threshold should be tuned using evaluation rather than hard-coded based on assumption.
+
+
+```
+Top-K = quantity.
+Score Threshold = quality cutoff.
+
+retriever = vectorstore.as_retriever(
+    search_type="similarity_score_threshold",
+    search_kwargs={
+        "k": 5,
+        "score_threshold": 0.7
+    }
+)
+```
+
+```
+                    USER QUERY
+                        ↓
+                Query Embedding
+                        ↓
+               Qdrant / HNSW
+                        ↓
+              Candidate Retrieval
+                 (e.g. top 20)
+                        ↓
+               Similarity Scores
+                        ↓
+                SCORE THRESHOLD
+              Remove weak results
+                        ↓
+                 RERANKING
+               Reorder results
+                        ↓
+                DEDUPLICATION
+              Remove duplicates
+                        ↓
+                    TOP-K
+             Select final 3–5
+                        ↓
+                  LLM CONTEXT
+                        ↓
+                       LLM
+```
+
+```
+20 candidates
+     ↓
+Threshold >= 0.70
+     ↓
+8 relevant candidates
+     ↓
+Rerank + Deduplicate
+     ↓
+Top-K = 3
+     ↓
+3 chunks → LLM
+```
+
+## RESULT OPTIMIZATION - Deduplication
+
+Deduplication removes repeated retrieval results before sending context to the LLM. Duplicates can occur because of overlapping chunks, multi-query retrieval, or because dense and BM25 searches return the same document. I remove duplicate chunks using a stable chunk ID or document metadata, which reduces redundant context, token usage and noise.
+
+```py
+def deduplicate(docs):
+    seen = set()
+    unique_docs = []
+
+    for doc in docs:
+        key = (
+            doc.metadata.get("source"),
+            doc.page_content
+        )
+
+        if key not in seen:
+            seen.add(key)
+            unique_docs.append(doc)
+
+    return unique_docs
+```
+
+## RESULT OPTIMIZATION - Top-K 
+
+Top-K determines how many of the highest-ranked retrieved chunks are selected for the LLM context. A small K gives focused context but can miss useful information, while a large K improves coverage but can introduce noise, latency and additional tokens. In a production RAG pipeline, I can retrieve a larger candidate set first, apply thresholding, reranking and deduplication, and then select the final Top-K chunks. I tune K based on retrieval and RAG evaluation rather than assuming one fixed value
+
+```
+Reranking      → Put best results first
+Threshold      → Remove weak results
+Deduplication  → Remove repeated results
+Top-K          → Select final results
+```
+
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+
+
+├── 3. CONTEXT CONSTRUCTION
+│      ├── Select relevant chunks
+│      ├── Parent document retrieval
+│      ├── Context compression
+│      └── Fit within token budget
+
+
+## CONTEXT CONSTRUCTION - Select relevant chunks
+
+After retrieval, I construct the context that will be passed to the LLM. I select the most relevant chunks after thresholding, reranking, deduplication and Top-K selection, preserve useful metadata such as the source, and assemble the chunks into a clear context. The goal is to give the LLM enough grounded information to answer the question without unnecessary noise or excessive tokens.
+
+## CONTEXT CONSTRUCTION - Parent document retrieval
+
+I use parent document retrieval when small chunks give better retrieval precision but don't provide enough context to the LLM. During ingestion, I create smaller child chunks linked to a larger parent using a parent ID. During retrieval, I search the child embeddings, and when a child matches, I fetch its parent section and provide that larger context to the LLM. This gives me precise retrieval while preserving enough context for generation.
+
+## CONTEXT CONSTRUCTION - Context compression
+
+Context compression reduces the retrieved context before sending it to the LLM. After retrieving relevant Kubernetes runbooks, I keep only the passages related to the user's question and remove unrelated content. This reduces token usage and noise while keeping important commands, error codes and technical details. It can be implemented using extractive techniques or an LLM-based compressor.”
+
+**1. Extractive compression — select only relevant sentences/passages from the original content.**
+```
+Original document
+      ↓
+Select relevant passages
+      ↓
+Compressed context
+```
+
+This is attractive for operational runbooks because the original commands and technical terms can be preserved.
+
+**2. LLM-based compression — ask an LLM to extract or summarize only information relevant to the query.**
+
+Conceptually:
+
+```py
+def compress_context(query, document):
+    prompt = f"""
+Extract only information relevant to the Kubernetes question.
+Preserve commands, error codes, resource names and technical terms.
+
+Question:
+{query}
+
+Document:
+{document}
+"""
+
+    return llm.invoke(prompt).content
+```
+
+For operational content, we need to be careful with free-form summarization because we don't want the compressor changing something like:
+
+
+## Context Construction — Fit Within Token Budget
+
+After retrieval, I make sure the final context fits within the LLM's token budget. The context window is shared by the system prompt, conversation history, user query, retrieved documents, tool results and model output. I reserve space for these components and use the remaining budget for RAG context. If the retrieved content is too large, I prioritize highly relevant chunks, remove duplicates and compress unnecessary content rather than blindly truncating it.
+
+```py
+def build_context(docs, max_tokens=5000):
+    selected = []
+    used_tokens = 0
+
+    for doc in docs:
+        tokens = count_tokens(doc.page_content)
+
+        if used_tokens + tokens > max_tokens:
+            continue
+
+        selected.append(doc)
+        used_tokens += tokens
+
+    return selected
+```
+
+Context window = total capacity.
+Token budget = how we allocate that capacity.
+
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+
+├── 4. GENERATION
+│      ├── System Prompt
+│      ├── User Question
+│      ├── Retrieved Context
+│      ├── LLM
+│      └── Grounded Answer + Citations/Sources
+
+## Generation
+We have completed Context Construction. Now the prepared context is given to the LLM to generate the final response.
+
+## Generation - System Prompt
+
+The system prompt defines how the LLM should behave when generating the RAG response. In my Kubernetes troubleshooting agent, I instruct the model to ground its answer in retrieved runbooks, preserve exact technical details, avoid inventing commands, and indicate when the retrieved context is insufficient. I also distinguish RAG knowledge from live MCP data, so the model doesn't treat a general runbook as proof of the current cluster state.
+
+```
+System Prompt = Rules
+Retrieved Context = Knowledge
+MCP = Live state
+LLM = Reasoning
+```
+
+```py
+from langchain_core.messages import SystemMessage, HumanMessage
+
+system_prompt = """
+You are a Kubernetes troubleshooting assistant.
+
+Use the provided runbook context to answer the question.
+Do not invent commands or technical details.
+If the context is insufficient, say so.
+Mention the source used.
+"""
+
+messages = [
+    SystemMessage(content=system_prompt),
+    HumanMessage(
+        content=f"""
+Context:
+{context}
+
+Question:
+{question}
+"""
+    )
+]
+
+response = llm.invoke(messages)
+```
+
+## Generation - User Question
+
+I preserve the original user question throughout the RAG pipeline because it represents the user's actual intent. I may rewrite that question or generate multiple queries for better retrieval, but those optimized queries are mainly used for searching the knowledge base. During final generation, I provide the original user question along with the retrieved context to the LLM so the final response still addresses exactly what the user asked.”
+
+```
+Original question = what the user wants.
+Rewritten query = how we find the information.
+```
+
+## Generation - Retrieved Context
+
+Retrieved context is the relevant information selected from the knowledge base and provided to the LLM during generation. In my Kubernetes RAG system, after retrieval, reranking, deduplication, Top-K selection and context construction, I pass the relevant runbook content to the LLM. The LLM uses this context to generate a grounded answer. I distinguish this from MCP results: RAG provides documented troubleshooting knowledge, while MCP provides the current live Kubernetes state.
+
+## Generation - LLM
+In the generation stage, the LLM receives the system instructions, original user question and retrieved context. It reasons over that information and generates the final response. In my Kubernetes agent, RAG provides troubleshooting knowledge and MCP can provide live cluster evidence. The LLM combines them to produce the answer. RAG does not retrain the model; the retrieved information is supplied as context during inference.
+
+## ## Generation - Grounded & Citation
+
+A grounded answer is one where the LLM's claims are supported by retrieved knowledge or verified tool data. In my Kubernetes agent, RAG provides runbook knowledge while MCP provides the current cluster state. I preserve source metadata during retrieval and include those sources with the generated response so users can trace and verify the information. Grounding tells us whether a claim is supported by evidence, while citation tells us where that evidence came from.
+
+Citation gives users a way to trace the answer back to the original knowledge source.
+
+```
+Grounding = evidence supports the answer.
+Citation = identifies the evidence source.
+```
+
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+---------------------------------------------------------
+
+
+├── 5. EVALUATION
+│      ├── Retrieval Quality
+│      │      ├── Recall@K
+│      │      ├── Precision@K
+│      │      └── MRR / NDCG
+│      │
+│      └── Generation Quality
+│             ├── Faithfulness / Groundedness
+│             ├── Answer Relevance
+│             └── Correctness
+
+
+## EVALUATION - Retrieval Quality - Recall@K
+
+Recall@K measures how much of the relevant information was successfully retrieved within the top K results. For example, if two Kubernetes runbook chunks are relevant to an ImagePullBackOff question and both appear in the top five results, Recall@5 is 100%. I use Recall@K to identify whether the retrieval system is missing important information before that context reaches the LLM.
+
+```py
+Recall@K =
+
+Relevant items found in Top-K
+─────────────────────────────
+Total relevant items
+```
+
+## EVALUATION - Retrieval Quality - Precision@K
+
+Precision@K measures the percentage of the Top-K retrieved chunks that are actually relevant. For example, if my Kubernetes RAG system retrieves five chunks for an ImagePullBackOff question and only two are relevant, Precision@5 is 40%. High precision is important because irrelevant chunks add noise, consume tokens, and can negatively affect the LLM's final answer.
+
+
+```py
+              Relevant results in Top-K
+Precision@K = ─────────────────────────
+                         K
+
+Example:
+
+3 relevant / 3 retrieved
+
+Precision@3 = 100%
+```
+
+**Example:**
+
+```
+Suppose there are 4 relevant chunks in our knowledge base.
+We retrieve Top-3, and 2 are relevant:
+Total relevant chunks = 4
+Retrieved chunks      = 3
+Relevant retrieved    = 2
+
+Then:
+Recall@3
+= 2 / 4
+= 50%
+
+Precision@3
+= 2 / 3
+= 66.7%
+```
+
+## EVALUATION - Retrieval Quality - MRR — Mean Reciprocal Rank
+
+MRR stands for Mean Reciprocal Rank. It measures how highly the first relevant result is ranked across multiple queries. For each query, I calculate 1 divided by the rank of the first relevant result and then average those values. In my Kubernetes RAG system, if the correct ImagePullBackOff runbook appears at rank 2, the reciprocal rank is 0.5. Higher MRR means relevant information tends to appear earlier in the retrieval results.
+
+```
+MRR = Where is my FIRST correct result?
+```
+
+## EVALUATION - Retrieval Quality - NDGC
+
+NDCG stands for Normalized Discounted Cumulative Gain. I use it when multiple retrieved documents can have different levels of relevance and I care about their ordering. It gives higher value when highly relevant Kubernetes runbook chunks appear near the top of the retrieval results. Unlike MRR, which focuses on the first relevant result, NDCG evaluates the quality of the overall ranking.
+
+
+
+
+```
+MRR = first relevant result.
+NDCG = overall ranking quality.
+```
+
+│      └── Generation Quality
+│             ├── Faithfulness / Groundedness
+│             ├── Answer Relevance
+│             └── Correctness
+
+## Generation Quality - Faithfulness
+
+Faithfulness measures whether the claims in the generated answer are supported by the retrieved context or verified tool evidence. In my Kubernetes agent, I evaluate whether statements are grounded either in retrieved runbooks or live MCP results. If the model introduces unsupported causes, commands, or cluster conditions, that's a faithfulness problem or hallucination.
+
+
+## Generation Quality - Answer Relevance
+
+Answer relevance measures how well the generated response addresses the user's actual question. For example, if the user asks how to troubleshoot ImagePullBackOff, the response should focus on image-pull diagnosis rather than unrelated Kubernetes information. I evaluate answer relevance separately from faithfulness because an answer can be fully supported by retrieved context but still be irrelevant to what the user asked.
+
+
+```
+Faithfulness
+→ Is the answer supported by the evidence?
+
+Answer Relevance
+→ Does the answer address the user's question?
+```
+
+## Generation Quality - Correctness
+
+Correctness measures whether the generated answer is factually and technically correct, usually by comparing it with a reference answer, expert judgment, or verified system state. I keep correctness separate from faithfulness because an LLM can faithfully reproduce information from retrieved context even when that source is incorrect. In my Kubernetes agent, where possible, I can also verify operational claims against live cluster state through MCP.
+
+```
+Faithfulness = Supported?
+Relevance = Answered the question?
+Correctness = Actually right?
+```
 
 
 

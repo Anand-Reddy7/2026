@@ -4,11 +4,12 @@
 ## docstring ("""Get pods from a Kubernetes namespace.""")
     Frameworks such as LangChain use it as part of the tool definition/schema exposed to the LLM.
 
-## Ground troubleshooting
+## Grounding = evidence supports the answer.
 ## Persistence comes from the checkpointer.
 ## The upper layers are sparse
 ## HNSW stands for Hierarchical Navigable Small World.
 ## Cosine similarity - measures the closeness between the query embedding and document embeddings
+## Citation = identifies the evidence source.
 
 
 ------------------------------------------------------
@@ -23,6 +24,7 @@
 - sparse
 - HNSW
 - Cosine similarity
+- citations
 ```
 
 
