@@ -1,3 +1,16 @@
+
+## Kubernetes Deployment 
+
+![image](images/kubernetes_deployment.png)
+
+
+## Kubernetes TroubleShooting 
+![image](images/kubernetes_troubleshooting.png)
+
+
+
+
+
 ```text
                          DEVELOPER
                              │
