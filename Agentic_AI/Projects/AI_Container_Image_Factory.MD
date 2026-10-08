@@ -500,3 +500,367 @@ def health():
         "status": "UP"
     }
 ```
+
+
+--------------------------------------
+
+# Project Explanation in Different way
+
+```
+One of the projects I worked on is **ImageOps AI**, an Agentic AI-based platform for managing the lifecycle of secure container base images.
+
+Let me first explain the problem we were trying to solve.
+
+Earlier, different application teams across the organization were deploying their applications as containers. Most teams were directly using publicly available Docker images as their base images.
+
+For example, a Python application might use:
+
+```text
+python:3.11
+```
+
+A Java application might use:
+
+```text
+eclipse-temurin:21
+```
+
+and similarly teams were using public images for Node.js, Go, and other runtimes.
+
+As container adoption increased, we had growing concerns around **security, vulnerabilities, consistency, and governance**.
+
+We didn't want every application team independently selecting a public image and configuring security in its own way.
+
+So the organization decided to provide **internally managed and security-hardened foundation images**.
+
+Instead of application teams directly consuming arbitrary public images, the platform team would maintain approved base images.
+
+For example:
+
+```text
+Public Image
+     ↓
+Platform Team
+     ↓
+Security Hardening
+     ↓
+Vulnerability Validation
+     ↓
+Required Certificates
+     ↓
+Standard OS Packages
+     ↓
+Non-root Configuration
+     ↓
+Standard Docker Policies
+     ↓
+Approved Internal Base Image
+     ↓
+Application Teams
+```
+
+These internal images follow our organizational standards.
+
+We perform things such as vulnerability scanning, installing required CA/SSL certificates, configuring non-root users, applying approved filesystem permissions, adding required image labels, controlling OS packages, removing unnecessary packages and package-manager caches, and applying other container security standards.
+
+The application teams then use these approved internal images as the foundation for their application containers.
+
+For example, instead of directly using:
+
+```text
+FROM python:3.13
+```
+
+they could use an internally maintained image such as:
+
+```text
+FROM company-registry/python:3.13
+```
+
+This gave us much better control over security and standardization.
+
+But that introduced another challenge.
+
+We don't maintain just one image for each technology. Different applications run on different supported runtime versions.
+
+For example, for Python we may need to support:
+
+```text
+Python 3.11
+Python 3.12
+Python 3.13
+```
+
+Similarly, we maintain multiple approved versions for Java, Node.js, Go, and other commonly used runtimes.
+
+We therefore defined a lifecycle policy where, for the runtimes managed by the platform, we maintain a defined supported version window—for example, the latest three approved versions.
+
+So if our current Python images are:
+
+```text
+Python 3.11
+Python 3.12
+Python 3.13
+```
+
+and Python 3.14 becomes an approved version, our desired state changes to:
+
+```text
+Python 3.12
+Python 3.13
+Python 3.14
+```
+
+We need to create and validate the new Python 3.14 foundation image, while the older 3.11 image goes through our deprecation lifecycle rather than being immediately deleted.
+
+Initially, much of this lifecycle involved manual platform-engineering work.
+
+An engineer had to monitor runtime versions and EOL information, determine whether we were missing an image, inspect the existing Dockerfiles, create the Dockerfile for the new version, apply our security standards, build the image, run validation tests, perform vulnerability scans, create a Git pull request, and then monitor the CI/CD pipeline.
+
+That is where we introduced **ImageOps AI**.
+
+The objective was not to allow AI to control the infrastructure directly. The objective was to automate the repetitive parts of the container-image lifecycle while keeping our existing security, Git, human-review, and CI/CD controls in place.
+
+We built the solution around **Python, FastAPI, PostgreSQL, LangGraph, OpenAI, RAG, MCP, Docker, Git, CI/CD, and OpenTelemetry**.
+
+The workflow starts with a scheduled **Version/EOL service**.
+
+Every 24 hours, the service checks the supported versions of the runtimes we manage. It applies our version-support policy and compares the desired versions against the foundation images already maintained by the platform.
+
+For example:
+
+```text
+Version/EOL API
+
+Python supported versions
+        ↓
+Latest-three policy
+        ↓
+3.12
+3.13
+3.14
+        ↓
+Compare with our repository/database
+        ↓
+Existing:
+3.11
+3.12
+3.13
+        ↓
+Missing:
+3.14
+```
+
+If a required version is missing, the service creates a **build request in PostgreSQL**.
+
+PostgreSQL acts as our operational system of record. It stores runtime information, container variants, build requests, build results, retry counts, and agent-run status.
+
+The new build request then becomes input to our **LangGraph agent workflow**.
+
+We use LangGraph because this isn't just a single LLM call. The process contains multiple steps, state transitions, conditional decisions, tool calls, retries, failure handling, and human approval.
+
+For a Python 3.14 request, for example, the agent first examines the existing repository and identifies the closest approved implementation, such as the Python 3.13 Dockerfile.
+
+But the LLM also needs to understand our organization's standards.
+
+OpenAI already understands Docker in general, but it doesn't automatically know our internal container policies, certificate requirements, approved installation patterns, security standards, troubleshooting procedures, or previous build failures.
+
+That's where we use **RAG**.
+
+Our RAG knowledge base contains information such as:
+
+```text
+Container standards
+Security policies
+Runtime-specific instructions
+Approved Dockerfile patterns
+Certificate installation procedures
+Troubleshooting runbooks
+Vulnerability-remediation guidance
+CI/CD runbooks
+Historical successful build fixes
+```
+
+For example, when generating the Python 3.14 image, the agent can retrieve the relevant Python standards, container security requirements, certificate configuration, and approved Dockerfile patterns.
+
+We combine that retrieved knowledge with the existing Python Dockerfile and provide the relevant context to OpenAI.
+
+OpenAI can then reason about what needs to change for Python 3.14 and generate the proposed Dockerfile or supporting-file changes.
+
+A very important part of our architecture is that **the LLM does not directly access Git, Docker, or production infrastructure**.
+
+We separate reasoning from execution using **MCP tools**.
+
+For example:
+
+```text
+LangGraph Agent
+      │
+      ├── Git MCP
+      │     ├── read files
+      │     ├── create branch
+      │     ├── push changes
+      │     └── create PR
+      │
+      ├── Container MCP
+      │     ├── validate Dockerfile
+      │     ├── request test build
+      │     ├── run smoke tests
+      │     └── request security scan
+      │
+      └── Notification MCP
+            └── send notifications
+```
+
+So the LLM reasons about what should happen, while controlled tools perform the actual operations.
+
+Before creating a pull request, we don't simply trust the generated Dockerfile.
+
+First, we perform deterministic validation.
+
+We check things such as the approved base image, Dockerfile syntax and policy compliance, non-root configuration, prohibited patterns, certificate requirements, and other mandatory security rules.
+
+Critical policies are enforced by code. We don't depend only on the LLM or RAG for security enforcement.
+
+After static validation succeeds, we perform a **test build**.
+
+The LangGraph agent does not directly run Docker. It calls our Container MCP, which delegates the operation to an isolated build service.
+
+The flow looks like:
+
+```text
+LangGraph Agent
+      ↓
+Container MCP
+      ↓
+Isolated Build Service
+      ↓
+docker build
+      ↓
+docker run
+      ↓
+Runtime Version Test
+      ↓
+Smoke Tests
+      ↓
+Non-root Validation
+      ↓
+Security Scan
+      ↓
+Structured Build Result
+```
+
+For a Python 3.14 image, for example, we verify that the container starts successfully, `python --version` returns the expected version, required certificates and libraries are available, the process runs as the expected non-root user, smoke tests pass, and the image meets our vulnerability policy.
+
+If all validations pass, the agent uses the Git MCP to create a branch, commit the proposed changes, and create a pull request.
+
+At this point we intentionally introduce **human-in-the-loop approval**.
+
+The agent can generate, test, and propose the change, but it cannot independently merge a production change.
+
+An engineer reviews and approves the PR.
+
+After the PR is merged, the normal CI/CD pipeline takes over.
+
+CI/CD independently checks out the approved source and performs a clean production build. It runs the required tests and security scans, generates the required software-bill-of-materials information where applicable, signs the image, and finally publishes the approved image to our internal container registry.
+
+One important design decision is that we **do not promote the temporary image created by the AI test-build process directly to production**.
+
+The pre-PR build is only validation.
+
+The authoritative production image is independently rebuilt by CI/CD from the reviewed and approved source.
+
+We also added a **self-healing workflow** for build failures.
+
+Suppose the Python 3.14 build fails with an error such as an OpenSSL or OS-package compatibility problem.
+
+The CI/CD system sends the build status and build-log reference back to ImageOps AI.
+
+The detailed CI logs are kept in log or object storage, while PostgreSQL stores the structured build result and log reference.
+
+The agent retrieves the relevant failure information through a controlled tool.
+
+We don't normally send thousands of raw CI-log lines directly to OpenAI. A deterministic log-processing layer extracts useful information such as:
+
+```text
+Failed stage
+Failed command
+Error message
+Exit code
+Relevant surrounding log lines
+```
+
+The agent then uses that failure context to retrieve related information from RAG—for example, Python troubleshooting instructions, OpenSSL remediation guidance, security policies, and similar historical successful fixes.
+
+The combination looks like:
+
+```text
+Current Build Error
+        +
+Current Dockerfile
+        +
+Relevant RAG Knowledge
+        ↓
+      OpenAI
+        ↓
+Root Cause Analysis
+        ↓
+Recommended Remediation
+```
+
+The agent first classifies the failure.
+
+This is important because not every CI failure requires a Dockerfile modification.
+
+For example, if the failure is caused by an invalid dependency, the agent may generate a corrective Dockerfile change.
+
+But if the registry returns an HTTP 503 or there is a temporary network failure, the agent should classify it as an infrastructure or transient issue and retry according to policy rather than unnecessarily changing the Dockerfile.
+
+If a code or configuration change is required, the agent generates the smallest appropriate correction, validates it, performs another isolated test build, and, if successful, creates a fix PR.
+
+We also don't allow unlimited autonomous self-healing.
+
+We use a bounded retry policy. For example, after a maximum of three unsuccessful automated remediation attempts, the workflow stops and escalates the issue to an engineer with the build information, attempted fixes, and failure history.
+
+Finally, we instrument the complete workflow using **OpenTelemetry**.
+
+This allows us to trace an entire execution from the initial build request through RAG retrieval, OpenAI calls, MCP tool executions, test builds, Git operations, and final CI/CD result.
+
+We capture information such as LLM latency and token usage, tool execution time, build duration, retry count, failures, and final workflow status.
+
+So at a high level, I describe the architecture as:
+
+```text
+Runtime APIs
+     ↓
+Version/EOL Service
+     ↓
+PostgreSQL
+     ↓
+LangGraph
+     ↓
+RAG + OpenAI
+     ↓
+MCP Tools
+     ↓
+Generate + Validate
+     ↓
+Isolated Test Build
+     ↓
+Git PR
+     ↓
+Human Approval
+     ↓
+CI/CD
+     ↓
+Secure Internal Registry
+```
+
+The main design principle behind the project is:
+
+**We use APIs for current facts, PostgreSQL for operational state, RAG for organizational knowledge, OpenAI for reasoning, MCP for controlled actions, and LangGraph for stateful orchestration.**
+
+We don't try to replace normal DevOps automation with AI. Deterministic activities such as version comparison, policy enforcement, database operations, security gates, and CI/CD remain deterministic. We use AI primarily where reasoning adds value—for understanding existing implementations, generating changes, analyzing complex failures, and proposing remediation.
+
+That combination gives us the benefit of Agentic AI while still maintaining the security, predictability, auditability, and human control required for a production DevOps platform.
+```
