@@ -10,7 +10,9 @@
 ## HNSW stands for Hierarchical Navigable Small World.
 ## Cosine similarity - measures the closeness between the query embedding and document embeddings
 ## Citation = identifies the evidence source.
-
+## Upsert = Update + Insert.
+## Parsing
+## Trade-off means gaining one benefit while sacrificing something else.
 
 ------------------------------------------------------
 ```py
@@ -25,6 +27,8 @@
 - HNSW
 - Cosine similarity
 - citations
+- upsert
+- Tradeoff
 ```
 
 
@@ -39,3 +43,6 @@ Grounding means providing an LLM with reliable external information so that its 
 
 ## Arbitrary text 
 It means free-form, unstructured text that can contain almost anything,
+
+## Parsing
+Parsing means reading a file, understanding its structure, and extracting useful information from it.
