@@ -31,6 +31,10 @@
 - Tradeoff
 ```
 
+## Algorithams
+- RRF (Resiprocal Rank Fusion)
+- BM25
+
 
 
 
