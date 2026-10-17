@@ -14,6 +14,7 @@
 - 2 Projects Explanation
 - A2A protocal
 - NLP technics
+- revise words and their meaning
 
 # Python Programs
 # =================
