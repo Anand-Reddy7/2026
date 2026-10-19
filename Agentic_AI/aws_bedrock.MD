@@ -303,3 +303,143 @@ if __name__ == "__main__":
     main()
 
 ```
+
+
+## Create S3 Bucket
+
+```py
+
+import boto3
+from botocore.exceptions import ClientError
+
+BUCKET_NAME = "my-kubepilot-ai-bucket-123456"
+REGION = "ap-south-1"  # Mumbai
+
+
+def create_s3_bucket(bucket_name, region):
+    s3_client = boto3.client("s3", region_name=region)
+
+    try:
+        response = s3_client.create_bucket(
+            Bucket=bucket_name,
+            CreateBucketConfiguration={
+                "LocationConstraint": region
+            }
+        )
+
+        print(f"S3 bucket '{bucket_name}' created successfully!")
+        print(f"Region: {region}")
+        print(f"Location: {response.get('Location')}")
+
+    except ClientError as e:
+        print("Error creating S3 bucket:")
+        print(e.response["Error"]["Message"])
+
+
+if __name__ == "__main__":
+    create_s3_bucket(BUCKET_NAME, REGION)
+```
+
+```py
+import boto3
+
+session = boto3.Session(
+    profile_name="bedrock-dev",
+    region_name="ap-south-1"
+)
+
+s3 = session.client("s3")
+bedrock = session.client("bedrock-runtime")
+ec2 = session.client("ec2")
+
+print(s3.list_buckets())
+```
+
+=====================================================
+
+## Converse API
+You send messages in a standardized Bedrock format. Bedrock translates them into the appropriate model interaction.
+Example: Use Claude today and another Converse-compatible model tomorrow with fewer application-level changes.
+
+Converse API — standardized messages:
+```py
+import boto3
+
+client = boto3.client(
+    "bedrock-runtime",
+    region_name="us-east-1"
+)
+
+response = client.converse(
+    modelId="YOUR_CONVERSE_SUPPORTED_MODEL_ID",
+    messages=[
+        {
+            "role": "user",
+            "content": [
+                {"text": "Why is my Kubernetes pod crashing?"}
+            ]
+        }
+    ],
+    inferenceConfig={"maxTokens": 300}
+)
+
+print(response["output"]["message"]["content"])
+```
+
+## InvokeModel API
+You construct the request using the specific JSON schema expected by that model.
+Example: A Claude request may use a different payload structure from a Nova request.
+
+InvokeModel API — model-specific JSON:
+```py
+import boto3
+import json
+
+client = boto3.client(
+    "bedrock-runtime",
+    region_name="us-east-1"
+)
+
+response = client.invoke_model(
+    modelId="YOUR_CLAUDE_MODEL_ID",
+    contentType="application/json",
+    accept="application/json",
+    body=json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 300,
+        "messages": [
+            {
+                "role": "user",
+                "content": "Why is my Kubernetes pod crashing?"
+            }
+        ]
+    })
+)
+
+result = json.loads(response["body"].read())
+print(result)
+```
+
+
+## Responses API
+You use the OpenAI Responses request format to interact with supported Bedrock-hosted models.
+Example: Your existing OpenAI().responses.create() call using openai.gpt-oss-120b on the Bedrock Mantle endpoint.
+
+Responses API — OpenAI-compatible:
+```py
+from openai import OpenAI
+
+client = OpenAI()
+
+response = client.responses.create(
+    model="openai.gpt-oss-120b",
+    input=[
+        {
+            "role": "user",
+            "content": "Why is my Kubernetes pod crashing?"
+        }
+    ]
+)
+
+print(response.output_text)
+```
